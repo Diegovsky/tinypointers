@@ -1,0 +1,13 @@
+[package]
+name = "tinypointers"
+version = "0.1.0"
+edition = "2021"
+authors = ["Diego Augusto"]
+
+[features]
+default = ["2byteid"]
+1byteid = []
+2byteid = []
+
+[dependencies]
+parking_lot = "0.12.1"
