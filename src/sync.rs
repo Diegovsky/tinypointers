@@ -1,4 +1,4 @@
-use std::{sync::atomic::AtomicU32, fmt::Debug, ops::{Deref, DerefMut}};
+use std::{sync::atomic::AtomicU32, fmt::Debug, ops::{Deref}};
 
 use crate::TinyPtr;
 
@@ -10,6 +10,18 @@ struct RefCounted<T> {
 }
 
 #[derive(Debug)]
+/// A weak reference to a [`TinyArc`], which is a thread-safe reference-counting tiny pointer.
+/// Essentially, it is non owning, and can be upgraded to a [`TinyArc`] at any time to access the
+/// data.
+/// ## Example
+/// ```rust
+/// use tinypointers::TinyArc;
+///
+/// let owned = TinyArc::new(42);
+/// let non_owned = TinyArc::downgrade(&owned);
+/// assert_eq!(*owned, 42);
+/// assert_eq!(*non_owned.upgrade().unwrap(), 42);
+/// ```
 pub struct TinyWeak<T>(TinyPtr<RefCounted<T>>);
 
 unsafe impl<T: Send + Sync> Send for TinyWeak<T> {}
@@ -21,29 +33,73 @@ impl<T> Clone for TinyWeak<T> {
     }
 }
 
+crate::boxed::impl_traits!(TinyArc);
+
 impl<T> TinyWeak<T> {
-    fn upgrade(&self) -> TinyArc<T> {
+    /// Attempts to upgrade the `TinyWeak` pointer to an `TinyArc`, extending the lifetime of the
+    /// data if successful.
+    /// ## Example
+    /// ```rust
+    /// use tinypointers::TinyArc;
+    ///
+    /// let owned = TinyArc::new(42);
+    /// let non_owned = TinyArc::downgrade(&owned);
+    ///
+    /// drop(owned);
+    ///
+    /// let owned = non_owned.upgrade(); // Panics
+    /// ```
+    ///
+    /// ## Panics
+    /// This panics if the data has since been dropped. I.E. if the `TinyArc` count is zero.
+    pub fn upgrade(&self) -> TinyArc<T> {
         let arc = TinyArc(self.0);
         TinyArc::increase_count(&arc);
         arc
     }
 }
 
+/// A thread-safe reference-counting tiny pointer. As with all types of this crate, memory is
+/// allocated on the heap. It is equivalent to [`std::sync::Arc`].
+///
+/// ```rust
+/// use tinypointers::TinyArc;
+///
+/// let x = TinyArc::new(42);
+/// let y = x.clone();
+/// println!("{}", *x); // prints 42
+/// println!("{}", *y); // prints 42
+/// // both x and y point to the same memory location
+/// ```
 pub struct TinyArc<T>(TinyPtr<RefCounted<T>>);
 
 unsafe impl<T: Send + Sync> Send for TinyArc<T> {}
 unsafe impl<T: Send + Sync> Sync for TinyArc<T> {}
 
 impl<T> TinyArc<T> {
+    /// Allocates memory on the heap and then places `value` into it.
+    /// ## Example
+    /// ```rust
+    /// use tinypointers::TinyArc;
+    ///
+    /// let x = TinyArc::new(42);
+    /// ```
     pub fn new(value: T) -> Self {
         Self(TinyPtr::new(RefCounted { count: AtomicU32::new(1), value }))
     }
+    /// Returns a raw pointer to the inner value.
+    ///
+    /// The pointer will be valid for as long as there are strong references to this allocation.
     pub fn as_ptr(this: &Self) -> *const T {
         &this.get().value
     }
+    /// Creates a [`TinyWeak`] pointer to this allocation.
+    ///
+    /// Weak references do not keep the allocation alive, and cannot access the inner value.
     pub fn downgrade(this: &Self) -> TinyWeak<T> {
         TinyWeak(this.0)
     }
+
     // internal apis
 
     fn get(&self) -> &RefCounted<T> {
@@ -88,7 +144,7 @@ impl<T> std::ops::Drop for TinyArc<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::TinyPtr;
+    
 
     use super::*;
 
@@ -128,7 +184,7 @@ mod tests {
     #[test]
     fn multiple_refs_test() {
         let i = TinyArc::new(30);
-        for x in 0..200 {
+        for _x in 0..200 {
             let j = i.clone();
             assert_eq!(*j, 30);
         }

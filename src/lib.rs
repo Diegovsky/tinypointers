@@ -1,4 +1,5 @@
-use std::{sync::Arc, borrow::Borrow, any::Any, marker::PhantomData, ptr::NonNull, ops::{Deref, DerefMut}, num::NonZeroUsize};
+#![doc = include_str!("../README.md")]
+use std::{marker::PhantomData, ptr::NonNull};
 
 #[cfg(all(feature="1byteid", feature="2byteid"))]
 compile_error!("Cannot enable both 1byteid and 2byteid features");
@@ -13,8 +14,16 @@ type RawId = std::num::NonZeroU8;
 mod boxed;
 mod sync;
 
+pub use boxed::TinyBox;
+pub use sync::{TinyArc, TinyWeak};
+
 #[derive(Debug, PartialEq, Eq, Hash)]
 #[repr(transparent)]
+/// A tiny pointer to a mutable value of type `T`. As with all types of this crate, memory is allocated on the heap.
+/// ```rust
+/// let x = TinyPtr::new(42);
+/// println!("{}", unsafe { *x.get() }); // prints 42
+/// ```
 pub struct TinyPtr<T>(RawId, PhantomData<*mut T>);
 
 impl<T> Clone for TinyPtr<T> {
@@ -72,9 +81,6 @@ impl<T> From<Box<T>> for Value {
 }
 
 impl Value {
-    fn new<T>(val: T) -> Self {
-        Self::from(Box::new(val))
-    }
     unsafe fn get<T>(&self) -> *mut T {
         std::mem::transmute(self.val)
     }
