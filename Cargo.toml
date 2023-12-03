@@ -3,6 +3,8 @@ name = "tinypointers"
 version = "0.1.0"
 edition = "2021"
 authors = ["Diego Augusto"]
+description = "Pointer implementations that take 8 or 16 bits."
+license = "MIT"
 
 [features]
 default = ["2byteid"]
