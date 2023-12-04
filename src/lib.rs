@@ -21,6 +21,8 @@ pub use sync::{TinyArc, TinyWeak};
 #[repr(transparent)]
 /// A tiny pointer to a mutable value of type `T`. As with all types of this crate, memory is allocated on the heap.
 /// ```rust
+/// use tinypointers::TinyPtr;
+///
 /// let x = TinyPtr::new(42);
 /// println!("{}", unsafe { *x.get() }); // prints 42
 /// ```
@@ -54,8 +56,18 @@ impl<T> TinyPtr<T> {
     pub unsafe fn get_mut<'a, 'b>(&'b mut self) -> &'a mut T {
         &mut *MEMORY.access(self)
     }
+    /// Takes ownership of the value and returns it.
+    ///
+    /// The underlying memory is freed.
     pub fn take(self) -> T {
         unsafe { MEMORY.take(self) }
+    }
+
+    /// Returns the internal id of the pointer.
+    ///
+    /// This is used for debugging purposes.
+    pub fn id(&self) -> RawId {
+        self.0
     }
 }
 
@@ -134,7 +146,65 @@ impl Memory {
 static MEMORY: Memory = Memory::new();
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
+
+    use std::{fmt::Debug, ops::{Deref, DerefMut}};
+    pub use std::sync::atomic::AtomicBool;
+
+    pub(crate) struct DropIndicator<T>(pub &'static AtomicBool, pub T);
+
+    impl<T: Debug> Debug for DropIndicator<T> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            self.1.fmt(f)
+        }
+    }
+
+    impl<T: PartialEq> PartialEq<T> for DropIndicator<T> {
+        fn eq(&self, other: &T) -> bool {
+            self.1 == *other
+        }
+    }
+
+    impl<T> Drop for DropIndicator<T> {
+        fn drop(&mut self) {
+            self.0.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+
+    impl<T> Deref for DropIndicator<T> {
+        type Target = T;
+        fn deref(&self) -> &T {
+            &self.1
+        }
+    }
+
+    impl<T> DerefMut for DropIndicator<T> {
+        fn deref_mut(&mut self) -> &mut T {
+            &mut self.1
+        }
+    }
+
+    macro_rules! make_drop_indicator {
+        ($ind:ident, $b:ident, $val:expr) => {
+            let $ind = &*Box::leak(Box::new(AtomicBool::new(false)));
+            let $b = DropIndicator($ind, $val);
+        };
+    }
+
+    macro_rules! assert_dropped {
+        ($ind:ident) => {
+            assert_dropped!($ind, "Value was not dropped")
+        };
+        ($ind:ident, $msg:expr $(, $arg:expr)*) => {{
+            let __ind = unsafe { Box::from_raw($ind as *const AtomicBool as *mut AtomicBool) };
+            assert!(
+                __ind.load(std::sync::atomic::Ordering::Relaxed), $msg $(, $arg)*); }
+        };
+    }
+
+    pub(crate) use make_drop_indicator;
+    pub(crate) use assert_dropped;
+
     use super::*;
     #[test]
     fn access_raw_test() {

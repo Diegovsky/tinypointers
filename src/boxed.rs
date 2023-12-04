@@ -15,8 +15,6 @@ pub struct TinyBox<T>(TinyPtr<T>);
 
 macro_rules! impl_traits {
     ($derefable:ident) => {
-
-
         impl<T: std::fmt::Display> std::fmt::Display for $derefable<T> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 self.deref().fmt(f)
@@ -83,6 +81,8 @@ impl<T> std::ops::Drop for TinyBox<T> {
 
 #[cfg(test)]
 mod tests {
+    use crate::tests::*;
+
     use super::*;
 
     #[test]
@@ -92,17 +92,25 @@ mod tests {
 
     #[test]
     fn single_box_test() {
-        let mut b = TinyBox::new(42);
-        *b += 5;
+        make_drop_indicator!(__ind, b, 42i32);
+        let mut b = TinyBox::new(b);
+        **b += 5;
         assert_eq!(*b, 47);
+
+        std::mem::drop(b);
+        assert_dropped!(__ind);
     }
 
     #[test]
     fn multiple_box_test() {
         for i in 0..100 {
-            let mut b = TinyBox::new(i);
-            *b += i;
+            make_drop_indicator!(__ind, b, i);
+            let mut b = TinyBox::new(b);
+            **b += i;
             assert_eq!(*b, i * 2);
+
+            std::mem::drop(b);
+            assert_dropped!(__ind);
         }
     }
 }

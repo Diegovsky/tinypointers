@@ -11,9 +11,11 @@ To accomplish this, memory is allocated on the heap and inserted into a global a
 ## Size optimizations
 Since this crate strives to minimize memory footprint, `NonZero*` are used internally to enable memory layout optimizations. This means both structs have the same size in the following example:
 ```rust
-struct Bar(TinyBox<List>);
+use tinypointers::TinyBox;
 
-struct Foo(Option<TinyBox<List>>);
+struct Bar(TinyBox<i32>);
+
+struct Foo(Option<TinyBox<i32>>);
 
 // 2 == 2
 assert_eq!(std::mem::size_of::<Bar>(), std::mem::size_of::<Foo>())
