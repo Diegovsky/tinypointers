@@ -160,7 +160,7 @@ impl<T> Deref for TinyArc<T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
         let refcounted = self.get();
-        if dbg!(refcounted.count.load(std::sync::atomic::Ordering::Relaxed)) == 0 {
+        if refcounted.count.load(std::sync::atomic::Ordering::Relaxed) == 0 {
             panic!("Attempted to dereference a TinyArc before it was built")
         }
         &refcounted.value
